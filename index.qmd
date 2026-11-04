@@ -1,0 +1,97 @@
+---
+title: "Pós-graduação em Ciência Política e Relações Internacionais"
+subtitle: "Onde ficam os programas, quando abrem as inscrições e como se comparam"
+page-layout: full
+---
+
+```{r}
+#| include: false
+raiz <- Sys.getenv("QUARTO_PROJECT_DIR", unset = ".")
+source(file.path(raiz, "R", "00_utils.R"))
+source(file.path(raiz, "R", "funcoes_site.R"))
+library(leaflet)
+library(crosstalk)
+
+dados  <- carregar_dados()
+resumo <- resumo_programas(dados)
+mapa   <- dados_mapa(dados)
+
+n_total  <- nrow(resumo)
+n_aberta <- sum(resumo$status == "aberta")
+n_breve  <- sum(resumo$status == "em_breve")
+n_sem_coord <- n_total - nrow(mapa)
+```
+
+<div class="numeros">
+<div><div class="n">`r n_total`</div><div class="r">programas monitorados</div></div>
+<div><div class="n">`r n_aberta`</div><div class="r">com inscrições abertas</div></div>
+<div><div class="n">`r n_breve`</div><div class="r">abrem em breve</div></div>
+</div>
+
+```{r}
+#| results: asis
+if (n_total == 0) {
+  cat("\n::: {.callout-warning}\n## Dados ainda não carregados\nExecute `Rscript R/build_data.R` e valide os arquivos manuais antes de publicar.\n:::\n")
+}
+```
+
+**Como ler o mapa.** A cor indica a subárea: <span style="color:`r COR_CP`">●</span> **azul** = Ciência Política, <span style="color:`r COR_RI`">●</span> **roxo** = Relações Internacionais; programas das duas subáreas têm miolo roxo e **borda azul**. O tamanho e a opacidade indicam a situação das inscrições (para o **mestrado**, quando o programa tem; senão, para o doutorado). Clique no ponto para ver os detalhes.
+
+```{r}
+#| output: asis
+if (nrow(mapa) == 0) {
+  cat("\n> Nenhum programa tem coordenadas. Preencha `data/manual/coordenadas.csv` (veja a página de metodologia).\n")
+}
+```
+
+```{r}
+#| eval: !expr nrow(mapa) > 0
+sd <- SharedData$new(mapa, key = ~id_capes, group = "mapa")
+
+filtros <- list(
+  filter_checkbox("subarea", "Subárea", sd, ~subarea_rotulo),
+  filter_checkbox("status", "Inscrições (nível de foco)", sd, ~status_rotulo),
+  filter_checkbox("nivel", "Níveis oferecidos", sd, ~niveis),
+  filter_select("uf", "UF", sd, ~uf)
+)
+
+legenda_html <- paste0(
+  "<div class='legenda-mapa'>",
+  "<b>Situação das inscrições</b><br>",
+  "<span class='dot aberta'></span>Abertas agora<br>",
+  "<span class='dot breve'></span>Abrem em breve<br>",
+  "<span class='dot fim'></span>Encerradas<br>",
+  "<span class='dot nd'></span>Sem edital divulgado",
+  "</div>"
+)
+
+m <- leaflet(sd, height = 600) |>
+  addProviderTiles(providers$CartoDB.Positron) |>
+  addCircleMarkers(
+    lng = ~lon_plot, lat = ~lat_plot,
+    radius = ~raio, color = ~cor_borda, weight = ~espessura, opacity = 1,
+    fillColor = ~cor_fill, fillOpacity = ~opac,
+    popup = ~popup, label = ~hover
+  ) |>
+  addLegend(
+    position = "bottomleft", opacity = 1, title = "Subárea",
+    colors = c(COR_CP, COR_RI, COR_RI),
+    labels = c("Ciência Política", "Relações Internacionais", "CP e RI (borda azul)")
+  ) |>
+  addControl(html = legenda_html, position = "bottomright") |>
+  setView(lng = -52, lat = -14, zoom = 4)
+
+bscols(widths = c(3, 9), filtros, m)
+```
+
+```{r}
+#| output: asis
+if (n_sem_coord > 0) {
+  cat(sprintf("\n*%d programa(s) sem coordenadas não aparecem no mapa, mas estão na [lista de programas](programas.qmd).*\n", n_sem_coord))
+}
+```
+
+::: {.callout-note}
+## Confirme sempre no edital oficial
+As datas vêm de curadoria manual a partir dos sites dos programas e mostram a data da última verificação. Antes de se inscrever, confira o edital oficial.
+:::

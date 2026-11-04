@@ -1,0 +1,81 @@
+---
+title: "Editais e calendário"
+subtitle: "O que está aberto, o que abre em breve e o que já encerrou"
+---
+
+```{r}
+#| include: false
+raiz <- Sys.getenv("QUARTO_PROJECT_DIR", unset = ".")
+source(file.path(raiz, "R", "00_utils.R"))
+source(file.path(raiz, "R", "funcoes_site.R"))
+
+dados <- carregar_dados()
+ref   <- hoje()
+
+ev <- edital_vigente(dados$editais, ref) |>
+  inner_join(dados$programas |> select(id_capes, nome, ies_sigla, uf, subarea), by = "id_capes") |>
+  mutate(
+    programa = paste0("[", md_escape(nome), "](programas/", slug_programa(id_capes), ".html)"),
+    nivel_rotulo = unname(NOMES_NIVEL[nivel]),
+    periodo = paste0(fmt_data(inscricao_inicio), " a ", fmt_data(inscricao_fim)),
+    edital = if_else(!is.na(url_edital) & nzchar(url_edital), paste0("[edital](", url_edital, ")"), "—"),
+    verificado = fmt_data(verificado_em)
+  )
+
+ultima_verificacao <- suppressWarnings(max(ev$verificado_em, na.rm = TRUE))
+
+tabela_ev <- function(df) {
+  df |> transmute(
+    Programa = programa, IES = ies_sigla, UF = uf, `Nível` = nivel_rotulo,
+    `Inscrições` = periodo, Vagas = ifelse(is.na(vagas), "—", as.character(vagas)),
+    Edital = edital, `Verificado em` = verificado
+  )
+}
+
+secao <- function(df, titulo, vazio) {
+  cat("\n\n## ", titulo, "\n\n", sep = "")
+  if (nrow(df) == 0) { cat(vazio, "\n\n"); return(invisible()) }
+  cat(knitr::kable(tabela_ev(df), format = "pipe"), sep = "\n")
+  cat("\n\n")
+}
+```
+
+Situação calculada em **`r fmt_data(ref)`**. `r if (is.finite(ultima_verificacao)) paste0("Último edital conferido em ", fmt_data(ultima_verificacao), ".") else ""` Os editais são curados manualmente a partir dos sites dos programas: **sempre confirme no edital oficial**.
+
+```{r}
+#| results: asis
+secao(ev |> filter(status == "aberta") |> arrange(inscricao_fim),
+      "Inscrições abertas agora", "Nenhuma inscrição aberta nos editais cadastrados.")
+
+secao(ev |> filter(status == "em_breve") |> arrange(inscricao_inicio),
+      "Abrem em breve", "Nenhum edital futuro cadastrado.")
+
+secao(ev |> filter(status == "encerrada") |> arrange(desc(inscricao_fim)),
+      "Encerradas", "Nenhum edital encerrado cadastrado.")
+
+# Programas/níveis sem edital divulgado, com a previsão informada (se houver)
+prev <- previsoes(dados$editais)
+oferta <- dados$programas |>
+  select(id_capes, nome, ies_sigla, uf, tem_mestrado, tem_mestrado_prof, tem_doutorado) |>
+  pivot_longer(c(tem_mestrado, tem_mestrado_prof, tem_doutorado), names_to = "campo", values_to = "oferece") |>
+  filter(oferece %in% TRUE) |>
+  mutate(nivel = unname(c(tem_mestrado = "M", tem_mestrado_prof = "MP", tem_doutorado = "D")[campo]))
+
+sem_edital <- oferta |>
+  anti_join(ev |> select(id_capes, nivel), by = c("id_capes", "nivel")) |>
+  left_join(prev, by = c("id_capes", "nivel")) |>
+  arrange(nome, nivel)
+
+cat("\n\n## Sem edital divulgado\n\n")
+if (nrow(sem_edital) == 0) {
+  cat("Todos os programas cadastrados têm edital.\n\n")
+} else {
+  tab <- sem_edital |> transmute(
+    Programa = paste0("[", md_escape(nome), "](programas/", slug_programa(id_capes), ".html)"),
+    IES = ies_sigla, UF = uf, `Nível` = unname(NOMES_NIVEL[nivel]),
+    `Previsão informada` = coalesce(previsao_texto, "—")
+  )
+  cat(knitr::kable(tab, format = "pipe"), sep = "\n")
+  cat("\n\n")
+}
+```

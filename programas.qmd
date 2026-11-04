@@ -1,0 +1,55 @@
+---
+title: "Programas"
+subtitle: "Todos os programas monitorados, com filtros por coluna"
+page-layout: full
+---
+
+```{r}
+#| include: false
+raiz <- Sys.getenv("QUARTO_PROJECT_DIR", unset = ".")
+source(file.path(raiz, "R", "00_utils.R"))
+source(file.path(raiz, "R", "funcoes_site.R"))
+
+dados  <- carregar_dados()
+resumo <- resumo_programas(dados)
+
+tabela <- resumo |>
+  arrange(nome) |>
+  transmute(
+    programa = paste0('<a href="programas/', slug_programa(id_capes), '.html">',
+                      htmltools::htmlEscape(nome), "</a>"),
+    ies = ies_sigla,
+    uf = factor(uf),
+    subarea = factor(subarea_rotulo),
+    niveis = factor(niveis),
+    conceito = conceito,
+    inscricao = factor(status_rotulo),
+    abre = fmt_data(inscricao_inicio),
+    fecha = fmt_data(inscricao_fim)
+  )
+```
+
+Clique no nome para abrir a página do programa. Use as caixas de filtro acima de cada coluna. **Inscrição** refere-se ao mestrado, quando o programa oferece; senão, ao doutorado.
+
+```{r}
+#| results: asis
+if (!nrow(tabela)) {
+  cat("\n> Catálogo ainda vazio. Execute `Rscript R/build_data.R` para importar os programas da CAPES.\n")
+}
+```
+
+```{r}
+DT::datatable(
+  tabela,
+  escape = -1,
+  rownames = FALSE,
+  filter = "top",
+  colnames = c("Programa", "IES", "UF", "Subárea", "Níveis", "Conceito CAPES",
+               "Inscrição", "Abre em", "Fecha em"),
+  options = list(
+    pageLength = 25,
+    autoWidth = FALSE,
+    language = list(url = "//cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json")
+  )
+)
+```

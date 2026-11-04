@@ -1,0 +1,97 @@
+---
+title: "Rankings"
+subtitle: "Dois rankings separados, com metodologia explícita"
+---
+
+```{r}
+#| include: false
+raiz <- Sys.getenv("QUARTO_PROJECT_DIR", unset = ".")
+source(file.path(raiz, "R", "00_utils.R"))
+source(file.path(raiz, "R", "funcoes_site.R"))
+
+rc  <- ler_processado("ranking_conceito")
+rp  <- ler_processado("ranking_produtividade")
+par <- ler_tabela("processed", "ranking_produtividade_params")
+prog <- ler_processado("programas")
+
+link_prog <- function(id, nome) {
+  paste0("[", md_escape(nome), "](programas/", slug_programa(id), ".html)")
+}
+```
+
+::: {.callout-warning}
+## Leia antes de comparar
+Os dois rankings medem **coisas diferentes** e **não são somados nem combinados**. O conceito CAPES resume a avaliação feita pela CAPES em cada ciclo; a produtividade é um indicador calculado por este projeto a partir de números de produção. Nenhum deles mede, sozinho, a qualidade da formação nem a adequação do programa ao seu projeto de pesquisa.
+:::
+
+```{r}
+#| results: asis
+if (!nrow(rc)) {
+  cat("\n> Rankings ainda não carregados. Execute `Rscript R/build_data.R`; o ranking de produtividade só terá posições quando a fonte de produção for integrada.\n")
+}
+```
+
+::: {.panel-tabset}
+
+## Conceito CAPES
+
+**Metodologia.** Usa o conceito do ciclo **`r cfg$ciclos$atual`** (comparado com o ciclo `r cfg$ciclos$anterior`). Como o conceito é uma escala curta, programas com a mesma nota aparecem **agrupados**, em ordem alfabética, sem posições numeradas: numerar criaria diferenças que a avaliação não afirma.
+
+Compare programas acadêmicos e profissionais com cautela: as modalidades têm critérios e escalas de nota próprios.
+
+```{r}
+#| results: asis
+notas <- sort(unique(na.omit(rc$conceito_atual)), decreasing = TRUE)
+
+for (nota in notas) {
+  grupo <- rc |> filter(conceito_atual == nota)
+  cat("\n\n**Conceito ", nota, "** (", nrow(grupo), " programa", if (nrow(grupo) > 1) "s", ")\n\n", sep = "")
+  tab <- grupo |> transmute(
+    Programa = link_prog(id_capes, nome), IES = ies_sigla, UF = uf, `Subárea` = subarea_rotulo,
+    `Níveis` = niveis,
+    anterior = ifelse(is.na(conceito_anterior), "—", as.character(conceito_anterior)),
+    `Variação` = case_when(is.na(variacao) ~ "—", variacao > 0 ~ paste0("▲ +", variacao),
+                           variacao < 0 ~ paste0("▼ ", variacao), TRUE ~ "=")
+  )
+  names(tab)[names(tab) == "anterior"] <- paste0("Conceito ", cfg$ciclos$anterior)
+  cat(knitr::kable(tab, format = "pipe"), sep = "\n")
+}
+
+sem_nota <- rc |> filter(is.na(conceito_atual))
+if (nrow(sem_nota)) {
+  cat("\n\n**Sem conceito no ciclo ", cfg$ciclos$atual, "** (programas novos ou sem avaliação registrada)\n\n", sep = "")
+  tab <- sem_nota |> transmute(Programa = link_prog(id_capes, nome), IES = ies_sigla, UF = uf,
+                               `Subárea` = subarea_rotulo, `Níveis` = niveis)
+  cat(knitr::kable(tab, format = "pipe"), sep = "\n")
+}
+```
+
+## Produtividade
+
+**Metodologia.** Publicações por docente permanente por ano, somando **`r par$janela_inicio`–`r par$janela_fim`**: total de publicações na janela ÷ soma de docentes permanentes ano a ano. Mostra-se também a média de **titulados por docente permanente por ano**. Entram no ranking apenas programas com pelo menos **`r par$min_anos_com_dados` anos com dados** e média de pelo menos **`r par$min_docentes_medio` docentes permanentes**. Empates dividem a posição.
+
+**Limitações.** (1) Em Ciência Política e Relações Internacionais, livros e capítulos têm peso grande, e bases bibliográficas costumam cobrir mal a produção em português; veja a página de [metodologia](metodologia.qmd). (2) Programas pequenos oscilam muito de um ano para outro. (3) A quantidade de publicações não mede a qualidade delas.
+
+```{r}
+#| results: asis
+elegiveis <- rp |> filter(elegivel) |> arrange(posicao, nome)
+tab <- elegiveis |> transmute(
+  `Pos.` = posicao, Programa = link_prog(id_capes, nome), IES = ies_sigla, UF = uf,
+  `Subárea` = subarea_rotulo,
+  `Publ. / docente / ano` = fmt_num(pub_por_docente_ano),
+  `Titulados / docente / ano` = fmt_num(titulados_por_docente_ano),
+  `Docentes (média)` = fmt_num(docentes_medio, 1),
+  `Anos com dados` = n_anos
+)
+cat(knitr::kable(tab, format = "pipe"), sep = "\n")
+
+fora <- rp |> filter(!elegivel) |> arrange(nome)
+if (nrow(fora)) {
+  cat("\n\n**Fora do ranking** (dados insuficientes)\n\n")
+  tab <- fora |> transmute(Programa = link_prog(id_capes, nome), IES = ies_sigla, UF = uf,
+                           Motivo = motivo_exclusao)
+  cat(knitr::kable(tab, format = "pipe"), sep = "\n")
+}
+```
+
+:::

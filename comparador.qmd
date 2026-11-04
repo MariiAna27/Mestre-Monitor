@@ -1,0 +1,111 @@
+---
+title: "Comparador"
+subtitle: "Escolha de 1 a 3 programas para ver lado a lado"
+---
+
+```{r}
+#| include: false
+raiz <- Sys.getenv("QUARTO_PROJECT_DIR", unset = ".")
+source(file.path(raiz, "R", "00_utils.R"))
+source(file.path(raiz, "R", "funcoes_site.R"))
+
+dados  <- carregar_dados()
+resumo <- resumo_programas(dados)
+rp     <- ler_processado("ranking_produtividade")
+
+comp <- resumo |>
+  left_join(rp |> select(id_capes, pub_por_docente_ano, titulados_por_docente_ano, docentes_medio, posicao),
+            by = "id_capes") |>
+  transmute(
+    rotulo = paste0(nome, " — ", ies_sigla),
+    nome, ies = ies_sigla, local = paste0(municipio, "/", uf),
+    subarea = subarea_rotulo, niveis, natureza,
+    conceito, conceito_anterior,
+    situacao = status_rotulo,
+    abre = fmt_data(inscricao_inicio), fecha = fmt_data(inscricao_fim),
+    vagas, verificado = fmt_data(verificado_em),
+    pub_docente = fmt_num(pub_por_docente_ano),
+    tit_docente = fmt_num(titulados_por_docente_ano),
+    docentes = fmt_num(docentes_medio, 1),
+    posicao,
+    pagina = paste0("programas/", slug_programa(id_capes), ".html")
+  )
+
+anual <- dados$producao |>
+  inner_join(resumo |> transmute(id_capes, rotulo = paste0(nome, " — ", ies_sigla)), by = "id_capes") |>
+  transmute(rotulo, ano,
+            pub_por_docente = if_else(!is.na(docentes_permanentes) & docentes_permanentes > 0,
+                                      publicacoes / docentes_permanentes, NA_real_))
+```
+
+```{r}
+# Este chunk NÃO pode ter 'include: false': ele emite os dados para as células OJS abaixo.
+ojs_define(comp = comp, anual = anual)
+```
+
+```{ojs}
+programas_comp = transpose(comp)
+anual_dados = transpose(anual)
+opcoes = programas_comp.map(d => d.rotulo).sort((a, b) => a.localeCompare(b, "pt-BR"))
+```
+
+```{ojs}
+viewof p1 = Inputs.select(opcoes.length ? opcoes : ["—"], {label: "Programa 1"})
+viewof p2 = Inputs.select(["—", ...opcoes], {label: "Programa 2"})
+viewof p3 = Inputs.select(["—", ...opcoes], {label: "Programa 3"})
+```
+
+```{ojs}
+escolhidos = [p1, p2, p3].filter(x => x !== "—").filter((x, i, a) => a.indexOf(x) === i)
+sel = escolhidos.map(r => programas_comp.find(d => d.rotulo === r))
+
+campos = [
+  ["Instituição", d => d.ies],
+  ["Local", d => d.local],
+  ["Subárea", d => d.subarea],
+  ["Níveis", d => d.niveis],
+  ["Natureza", d => d.natureza],
+  ["Conceito CAPES (ciclo atual)", d => d.conceito],
+  ["Conceito (ciclo anterior)", d => d.conceito_anterior],
+  ["Inscrições (nível de foco)", d => d.situacao],
+  ["Abre em", d => d.abre],
+  ["Fecha em", d => d.fecha],
+  ["Vagas", d => d.vagas],
+  ["Edital verificado em", d => d.verificado],
+  ["Publicações / docente / ano", d => d.pub_docente],
+  ["Titulados / docente / ano", d => d.tit_docente],
+  ["Docentes permanentes (média)", d => d.docentes],
+  ["Posição no ranking de produtividade", d => d.posicao]
+]
+
+html`<table class="table comp-table">
+  <thead><tr><th></th>${sel.map(d => html`<th><a href="${d.pagina}">${d.nome}</a></th>`)}</tr></thead>
+  <tbody>${campos.map(([rot, f]) => html`<tr><th scope="row">${rot}</th>${sel.map(d => html`<td>${f(d) ?? "—"}</td>`)}</tr>`)}</tbody>
+</table>`
+```
+
+### Publicações por docente permanente, por ano
+
+```{ojs}
+Plot.plot({
+  height: 340,
+  marginLeft: 50,
+  x: {label: "Ano", tickFormat: "d"},
+  y: {label: "Publicações por docente permanente", grid: true},
+  color: {legend: true, domain: escolhidos},
+  marks: [
+    Plot.ruleY([0]),
+    Plot.line(anual_dados.filter(d => escolhidos.includes(d.rotulo) && d.pub_por_docente != null),
+              {x: "ano", y: "pub_por_docente", stroke: "rotulo", marker: "circle"})
+  ]
+})
+```
+
+```{r}
+#| results: asis
+if (!nrow(comp)) {
+  cat("\n> Comparador indisponível até que os dados dos programas sejam importados. Execute `Rscript R/build_data.R`.\n")
+}
+```
+
+*Os rankings e indicadores seguem a [metodologia](metodologia.qmd). Conceito CAPES e produtividade medem coisas diferentes e não devem ser lidos como substitutos um do outro.*

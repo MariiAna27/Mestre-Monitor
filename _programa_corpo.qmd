@@ -1,0 +1,108 @@
+```{r}
+#| include: false
+# Corpo comum das páginas de programa. A variável 'id_programa' é definida em cada página gerada.
+raiz <- Sys.getenv("QUARTO_PROJECT_DIR", unset = ".")
+source(file.path(raiz, "R", "00_utils.R"))
+source(file.path(raiz, "R", "funcoes_site.R"))
+library(ggplot2)
+
+dados  <- carregar_dados()
+resumo <- resumo_programas(dados)
+p <- resumo |> filter(id_capes == id_programa)
+stopifnot(nrow(p) == 1)
+
+ev   <- edital_vigente(dados$editais) |> filter(id_capes == id_programa)
+prev <- previsoes(dados$editais) |> filter(id_capes == id_programa)
+```
+
+```{r}
+#| results: asis
+cat("**", p$subarea_rotulo, "** · ", p$niveis, " · ", p$natureza, " · ", p$municipio, "/", p$uf, "\n\n", sep = "")
+if (!is.na(p$url_programa) && nzchar(p$url_programa)) {
+  cat("[Site oficial do programa](", p$url_programa, ")\n\n", sep = "")
+}
+```
+
+## Inscrições
+
+```{r}
+#| results: asis
+niveis_prog <- c(M = p$tem_mestrado, MP = p$tem_mestrado_prof, D = p$tem_doutorado)
+niveis_prog <- names(niveis_prog)[niveis_prog %in% TRUE]
+
+tab <- map(niveis_prog, function(nv) {
+  e  <- ev |> filter(nivel == nv)
+  pv <- prev |> filter(nivel == nv)
+  tibble(
+    `Nível` = NOMES_NIVEL[[nv]],
+    `Situação` = if (nrow(e)) rotulo_status(e$status[1]) else "Sem edital divulgado",
+    `Inscrições` = if (nrow(e)) paste0(fmt_data(e$inscricao_inicio[1]), " a ", fmt_data(e$inscricao_fim[1])) else "—",
+    Vagas = if (nrow(e) && !is.na(e$vagas[1])) as.character(e$vagas[1]) else "—",
+    Edital = if (nrow(e) && !is.na(e$url_edital[1]) && nzchar(e$url_edital[1])) paste0("[edital](", e$url_edital[1], ")") else "—",
+    `Verificado em` = if (nrow(e)) fmt_data(e$verificado_em[1]) else "—",
+    `Previsão` = if (nrow(pv)) pv$previsao_texto[1] else "—"
+  )
+}) |> list_rbind()
+
+if (nrow(tab)) print(knitr::kable(tab, format = "pipe")) else cat("Níveis de curso não informados.")
+```
+
+*Confirme sempre no edital oficial.*
+
+## Avaliação CAPES
+
+```{r}
+#| results: asis
+av <- dados$avaliacoes |>
+  filter(id_capes == id_programa) |>
+  arrange(desc(ciclo)) |>
+  transmute(Ciclo = ciclo, Conceito = conceito)
+
+if (nrow(av)) print(knitr::kable(av, format = "pipe")) else cat("Sem conceito registrado.")
+```
+
+## Linhas de pesquisa
+
+```{r}
+#| results: asis
+li <- dados$linhas |> filter(id_capes == id_programa)
+if (nrow(li)) {
+  cat(paste0("- ", li$linha, ifelse(is.na(li$descricao), "", paste0(": ", li$descricao)), collapse = "\n"), "\n")
+} else {
+  cat("Linhas de pesquisa ainda não cadastradas.\n")
+}
+```
+
+## Produção e titulação
+
+```{r}
+#| results: asis
+pr <- dados$producao |>
+  filter(id_capes == id_programa) |>
+  arrange(ano) |>
+  mutate(pub_por_docente = if_else(!is.na(docentes_permanentes) & docentes_permanentes > 0,
+                                   publicacoes / docentes_permanentes, NA_real_))
+
+if (nrow(pr)) {
+  tab <- pr |> transmute(Ano = as.integer(ano), `Docentes permanentes` = docentes_permanentes,
+                         `Publicações` = publicacoes, `Publ. por docente` = fmt_num(pub_por_docente),
+                         Titulados = titulados)
+  print(knitr::kable(tab, format = "pipe"))
+} else {
+  cat("Sem dados de produção cadastrados.")
+}
+```
+
+```{r}
+#| fig-height: 3.2
+if (nrow(pr) > 1 && any(!is.na(pr$pub_por_docente))) {
+  ggplot(pr, aes(x = ano, y = pub_por_docente)) +
+    geom_col(fill = cor_subarea(p$subarea), width = 0.7) +
+    scale_x_continuous(breaks = unique(pr$ano)) +
+    labs(x = NULL, y = "Publicações por docente permanente") +
+    theme_minimal(base_size = 12) +
+    theme(panel.grid.minor = element_blank(), panel.grid.major.x = element_blank())
+}
+```
+
+*Veja a [metodologia](../metodologia.html) para entender como os indicadores são calculados e suas limitações.*

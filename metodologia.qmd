@@ -1,0 +1,82 @@
+---
+title: "Metodologia e dados"
+subtitle: "De onde vêm os números, como são calculados e o que eles não dizem"
+---
+
+```{r}
+#| include: false
+raiz <- Sys.getenv("QUARTO_PROJECT_DIR", unset = ".")
+source(file.path(raiz, "R", "00_utils.R"))
+source(file.path(raiz, "R", "funcoes_site.R"))
+
+meta <- ler_processado("metadados")
+par  <- ler_tabela("processed", "ranking_produtividade_params")
+```
+
+## Escopo
+
+O monitor reúne programas de pós-graduação *stricto sensu* da área de avaliação **Ciência Política e Relações Internacionais** da CAPES. Como a área junta duas subáreas, cada programa é classificado por este projeto como **CP** (Ciência Política), **RI** (Relações Internacionais) ou **CP+RI**. Essa classificação **não vem da CAPES**: parte de uma sugestão automática baseada no nome do programa e é revisada manualmente (`data/manual/subarea.csv`).
+
+## Fontes e datas de atualização
+
+```{r}
+tab <- meta |>
+  transmute(Fonte = fonte, `Atualizada em` = fmt_data(atualizado_em), Arquivo = paste0("`", arquivo, "`"))
+knitr::kable(tab, format = "pipe")
+```
+
+- **CAPES, Dados Abertos:** o pipeline importa programas e conceitos do conjunto anual de 2024, base do ciclo 2021–2024. [Fonte oficial e licença CC BY](https://dadosabertos.capes.gov.br/dataset/2021-a-2024-programas-da-pos-graduacao-stricto-sensu-no-brasil). Docentes, discentes, titulados e produção ainda não estão integrados.
+- **Plataforma Sucupira e GeoCAPES:** fontes de conferência para conceitos, avaliações e localização; ainda não são importadas automaticamente.
+- **Sites dos programas:** editais, vagas, calendário, linhas de pesquisa e coordenadas são preenchidos manualmente. Ainda não há verificador automático de mudanças; cada registro deve informar a URL e a data de conferência.
+- **ABCP, ABRI e ANPOCS:** fontes de contexto, eventos e grupos de trabalho; não alimentam os indicadores atuais.
+
+## Conceito CAPES
+
+O conceito é a nota atribuída ao programa nos ciclos avaliativos da CAPES. O ranking usa o ciclo **`r cfg$ciclos$atual`** e mostra o ciclo **`r cfg$ciclos$anterior`** para comparação. Programas com a mesma nota são agrupados, sem posições. Notas de programas acadêmicos e profissionais devem ser comparadas com cautela.
+
+## Produtividade
+
+- **Indicador principal:** publicações por docente permanente por ano. É o total de publicações dos anos **`r par$janela_inicio`–`r par$janela_fim`** dividido pela soma de docentes permanentes ano a ano.
+- **Indicador complementar:** titulados por docente permanente por ano, na mesma janela.
+- **Elegibilidade:** mínimo de **`r par$min_anos_com_dados` anos com dados** e média de **`r par$min_docentes_medio` docentes permanentes**; programas fora desse critério aparecem em lista separada, com o motivo.
+- **Sem índice composto:** os indicadores não são combinados em uma nota única, para não esconder escolhas arbitrárias de peso.
+
+**Limitações conhecidas**
+
+1. Livros e capítulos pesam muito na área, e bases bibliográficas internacionais cobrem mal a produção em português; qualquer ranking baseado em indexadores tende a penalizar programas que publicam mais em livros e periódicos nacionais.
+2. Programas com poucos docentes têm indicadores instáveis.
+3. Publicar mais não significa publicar melhor.
+4. Mudanças de critério de coleta da CAPES entre anos podem afetar comparações históricas.
+
+## Editais
+
+Cada edital mostra a **data da última verificação** (`verificado_em`). O status ("aberta", "abre em breve", "encerrada") é calculado automaticamente a partir das datas de inscrição e da data de geração do site. No mapa, o status refere-se ao **mestrado**, quando o programa oferece; senão, ao doutorado.
+
+## Atualização
+
+| Dado | Frequência prevista | Responsável |
+|---|---|---|
+| Editais, vagas e calendário | semanal durante inscrições; mensal no restante do ano | curadoria de processos seletivos |
+| Programas e conceitos CAPES | a cada nova divulgação anual | manutenção do pipeline + revisão acadêmica |
+| Subáreas e coordenadas | na entrada de cada programa e revisão anual | curadoria de dados |
+| Linhas de pesquisa e links oficiais | semestral | curadoria de programas |
+| Produção e titulação | anual, após integração da fonte CAPES | manutenção do pipeline + revisão metodológica |
+
+As funções estão definidas, mas seus titulares ainda precisam ser identificados
+pela equipe antes da publicação. O rodapé de todas as páginas informa a data
+da versão dos dados. As datas de conferência dos editais, linhas de pesquisa e
+coordenadas também ficam registradas por fonte nas tabelas processadas.
+
+## Baixar os dados
+
+As tabelas usadas pelo site estão disponíveis em CSV:
+
+- [programas.csv](data/processed/programas.csv)
+- [avaliacoes.csv](data/processed/avaliacoes.csv)
+- [editais.csv](data/processed/editais.csv)
+- [linhas_pesquisa.csv](data/processed/linhas_pesquisa.csv)
+- [producao.csv](data/processed/producao.csv)
+- [ranking_conceito.csv](data/processed/ranking_conceito.csv)
+- [ranking_produtividade.csv](data/processed/ranking_produtividade.csv)
+
+Dados pessoais de docentes e discentes não são publicados nesta versão.

@@ -1,0 +1,7 @@
+_site/
+.quarto/
+.Rhistory
+.RData
+data/raw/
+data/processed/
+programas/

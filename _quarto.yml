@@ -1,0 +1,44 @@
+project:
+  type: website
+  output-dir: _site
+  render:
+    - index.qmd
+    - programas.qmd
+    - editais.qmd
+    - comparador.qmd
+    - rankings.qmd
+    - metodologia.qmd
+    - programas/*.qmd
+  resources:
+    - data/processed
+
+website:
+  title: "Monitor de Pós-graduação em CP e RI"
+  navbar:
+    left:
+      - text: "Início"
+        href: index.qmd
+      - text: "Programas"
+        href: programas.qmd
+      - text: "Editais"
+        href: editais.qmd
+      - text: "Comparar"
+        href: comparador.qmd
+      - text: "Rankings"
+        href: rankings.qmd
+      - text: "Metodologia e dados"
+        href: metodologia.qmd
+
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-tools: false
+    link-external-newwindow: true
+    css: styles.css
+    include-after-body: _includes/footer.html
+
+execute:
+  freeze: false
+  warning: false
+  message: false
