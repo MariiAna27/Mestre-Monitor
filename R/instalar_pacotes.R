@@ -1,7 +1,12 @@
 pacotes <- c(
-  "dplyr", "tidyr", "purrr", "stringr", "tibble", "readr", "knitr",
-  "ggplot2", "leaflet", "crosstalk", "DT", "htmltools", "jsonlite"
+  "dplyr", "purrr", "stringr", "tibble", "readr",
+  "jsonlite",
+  "ggplot2",
+  "leaflet", "crosstalk",
+  "DT", "htmltools",
+  "knitr", "rmarkdown"
 )
+
 faltantes <- pacotes[!vapply(pacotes, requireNamespace, logical(1), quietly = TRUE)]
 
 if (length(faltantes)) {

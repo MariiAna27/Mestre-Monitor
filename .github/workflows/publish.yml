@@ -30,6 +30,20 @@ jobs:
         with:
           use-public-rspm: true
 
+      - name: Set R library cache
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/R-library"
+          echo "R_LIBS_USER=$RUNNER_TEMP/R-library" >> "$GITHUB_ENV"
+
+      - name: Cache R packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/R-library
+          key: ${{ runner.os }}-r-library-${{ hashFiles('R/instalar_pacotes.R') }}
+          restore-keys: |
+            ${{ runner.os }}-r-library-
+
       - name: Set up Quarto
         uses: quarto-dev/quarto-actions/setup@v2
 
