@@ -1,6 +1,8 @@
 ---
 title: "Editais e calendário"
 subtitle: "O que está aberto, o que abre em breve e o que já encerrou"
+page-layout: full
+toc: false
 ---
 
 ```{r}
@@ -35,8 +37,9 @@ tabela_ev <- function(df) {
 secao <- function(df, titulo, vazio) {
   cat("\n\n## ", titulo, "\n\n", sep = "")
   if (nrow(df) == 0) { cat(vazio, "\n\n"); return(invisible()) }
+  cat("\n::: {.editais-tabela-wrap}\n\n")
   cat(knitr::kable(tabela_ev(df), format = "pipe"), sep = "\n")
-  cat("\n\n")
+  cat("\n\n:::\n\n")
 }
 ```
 
@@ -44,6 +47,17 @@ Situação calculada em **`r fmt_data(ref)`**. `r if (is.finite(ultima_verificac
 
 ```{r}
 #| results: asis
+#| echo: false
+if (nrow(ev |> filter(status == "aberta")) > 0) {
+  cat("\n::: {.callout-tip}\n## Editais disponíveis para consulta\nHá editais abertos no momento. Confira abaixo as oportunidades vigentes.\n:::\n")
+} else {
+  cat("\n::: {.callout-important}\n## Desculpa, ainda não há nenhum edital aberto :(\nMas não fica assim, de volta aos estudos que já já abre um!\n:::\n")
+}
+```
+
+```{r}
+#| results: asis
+#| echo: false
 if (!nrow(dados$programas)) {
   cat("\n::: {.callout-warning}\nO catálogo ainda não foi gerado. Execute `Rscript R/build_data.R` e registre os editais em `data/manual/editais.csv`.\n:::\n")
 }
@@ -51,6 +65,7 @@ if (!nrow(dados$programas)) {
 
 ```{r}
 #| results: asis
+#| echo: false
 secao(ev |> filter(status == "aberta") |> arrange(inscricao_fim),
       "Inscrições abertas agora", "Nenhuma inscrição aberta nos editais cadastrados.")
 
@@ -77,12 +92,13 @@ cat("\n\n## Sem edital divulgado\n\n")
 if (nrow(sem_edital) == 0) {
   cat("Todos os programas cadastrados têm edital.\n\n")
 } else {
+  cat("\n::: {.editais-tabela-wrap}\n\n")
   tab <- sem_edital |> transmute(
     Programa = paste0("[", md_escape(nome), "](programas/", slug_programa(id_capes), ".html)"),
     IES = ies_sigla, UF = uf, `Nível` = unname(NOMES_NIVEL[nivel]),
     `Previsão informada` = coalesce(previsao_texto, "—")
   )
   cat(knitr::kable(tab, format = "pipe"), sep = "\n")
-  cat("\n\n")
+  cat("\n\n:::\n\n")
 }
 ```

@@ -13,14 +13,16 @@ source(file.path(raiz, "R", "funcoes_site.R"))
 dados  <- carregar_dados()
 resumo <- resumo_programas(dados)
 
+ordem_subarea <- c("Ciência Política", "Relações Internacionais")
+
 tabela <- resumo |>
-  arrange(nome) |>
+  arrange(factor(subarea_rotulo, levels = ordem_subarea), nome) |>
   transmute(
     programa = paste0('<a href="programas/', slug_programa(id_capes), '.html">',
                       htmltools::htmlEscape(nome), "</a>"),
     ies = ies_sigla,
     uf = factor(uf),
-    subarea = factor(subarea_rotulo),
+    subarea = factor(subarea_rotulo, levels = ordem_subarea),
     niveis = factor(niveis),
     conceito = conceito,
     inscricao = factor(status_rotulo),
@@ -29,16 +31,28 @@ tabela <- resumo |>
   )
 ```
 
-Clique no nome para abrir a página do programa. Use as caixas de filtro acima de cada coluna. **Inscrição** refere-se ao mestrado, quando o programa oferece; senão, ao doutorado.
+Clique no nome para abrir a página do programa. Use os filtros por tipo e também as caixas de filtro acima de cada coluna. **Inscrição** refere-se ao mestrado, quando o programa oferece; senão, ao doutorado.
 
 ```{r}
 #| results: asis
+#| echo: false
+cat("<div class='programas-filtros'>",
+    "<button type='button' class='programa-filtro active' data-subarea='todos'>Todos</button>",
+    "<button type='button' class='programa-filtro' data-subarea='Ciência Política'>Ciência Política</button>",
+    "<button type='button' class='programa-filtro' data-subarea='Relações Internacionais'>Relações Internacionais</button>",
+    "</div>")
+```
+
+```{r}
+#| results: asis
+#| echo: false
 if (!nrow(tabela)) {
   cat("\n> Catálogo ainda vazio. Execute `Rscript R/build_data.R` para importar os programas da CAPES.\n")
 }
 ```
 
 ```{r}
+#| echo: false
 DT::datatable(
   tabela,
   escape = -1,
@@ -47,9 +61,62 @@ DT::datatable(
   colnames = c("Programa", "IES", "UF", "Subárea", "Níveis", "Conceito CAPES",
                "Inscrição", "Abre em", "Fecha em"),
   options = list(
+    order = list(list(3, "asc"), list(0, "asc")),
     pageLength = 25,
     autoWidth = FALSE,
     language = list(url = "//cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json")
   )
 )
+```
+
+```{js}
+//| echo: false
+document.addEventListener("DOMContentLoaded", function () {
+  const buttons = document.querySelectorAll(".programa-filtro");
+  const tableNode = document.querySelector(".dataTable");
+
+  if (!tableNode || !window.jQuery) return;
+
+  const dt = window.jQuery(tableNode).DataTable();
+
+  function aplicarFiltro(subarea) {
+    if (subarea === "todos") {
+      dt.column(3).search("").draw();
+    } else {
+      dt.column(3).search(subarea, true, false).draw();
+    }
+
+    buttons.forEach(function (btn) {
+      const active = btn.dataset.subarea === subarea;
+      btn.classList.toggle("active", active);
+    });
+  }
+
+  function atualizarPillsSubarea() {
+    const rows = dt.rows({ page: "current" }).nodes();
+    rows.each(function () {
+      const cells = this.querySelectorAll("td");
+      if (!cells || cells.length < 4) return;
+
+      const raw = cells[3].textContent.trim();
+      if (!raw) return;
+
+      const pill = document.createElement("span");
+      pill.className = "subarea-pill " + (raw === "Ciência Política" ? "cp" : raw === "Relações Internacionais" ? "ri" : "ambas");
+      pill.textContent = raw;
+
+      cells[3].innerHTML = "";
+      cells[3].appendChild(pill);
+    });
+  }
+
+  buttons.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      aplicarFiltro(this.dataset.subarea);
+    });
+  });
+
+  dt.on("draw.dt", atualizarPillsSubarea);
+  atualizarPillsSubarea();
+});
 ```

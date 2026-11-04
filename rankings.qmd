@@ -1,6 +1,8 @@
 ---
 title: "Rankings"
 subtitle: "Dois rankings separados, com metodologia explícita"
+page-layout: full
+toc: false
 ---
 
 ```{r}
@@ -26,6 +28,7 @@ Os dois rankings medem **coisas diferentes** e **não são somados nem combinado
 
 ```{r}
 #| results: asis
+#| echo: false
 if (!nrow(rc)) {
   cat("\n> Rankings ainda não carregados. Execute `Rscript R/build_data.R`; o ranking de produtividade só terá posições quando a fonte de produção for integrada.\n")
 }
@@ -41,28 +44,36 @@ Compare programas acadêmicos e profissionais com cautela: as modalidades têm c
 
 ```{r}
 #| results: asis
-notas <- sort(unique(na.omit(rc$conceito_atual)), decreasing = TRUE)
+#| echo: false
+for (sub in c("CP (Ciência Política)", "RI (Relações Internacionais)")) {
+  sublabel <- if (grepl("CP", sub, fixed = TRUE)) "Ciência Política" else "Relações Internacionais"
+  subgrupo <- rc |> filter(subarea_rotulo == sublabel)
+  if (nrow(subgrupo) == 0) next
 
-for (nota in notas) {
-  grupo <- rc |> filter(conceito_atual == nota)
-  cat("\n\n**Conceito ", nota, "** (", nrow(grupo), " programa", if (nrow(grupo) > 1) "s", ")\n\n", sep = "")
-  tab <- grupo |> transmute(
-    Programa = link_prog(id_capes, nome), IES = ies_sigla, UF = uf, `Subárea` = subarea_rotulo,
-    `Níveis` = niveis,
-    anterior = ifelse(is.na(conceito_anterior), "—", as.character(conceito_anterior)),
-    `Variação` = case_when(is.na(variacao) ~ "—", variacao > 0 ~ paste0("▲ +", variacao),
-                           variacao < 0 ~ paste0("▼ ", variacao), TRUE ~ "=")
-  )
-  names(tab)[names(tab) == "anterior"] <- paste0("Conceito ", cfg$ciclos$anterior)
-  cat(knitr::kable(tab, format = "pipe"), sep = "\n")
-}
+  cat("\n\n## ", sub, "\n\n", sep = "")
+  notas <- sort(unique(na.omit(subgrupo$conceito_atual)), decreasing = TRUE)
 
-sem_nota <- rc |> filter(is.na(conceito_atual))
-if (nrow(sem_nota)) {
-  cat("\n\n**Sem conceito no ciclo ", cfg$ciclos$atual, "** (programas novos ou sem avaliação registrada)\n\n", sep = "")
-  tab <- sem_nota |> transmute(Programa = link_prog(id_capes, nome), IES = ies_sigla, UF = uf,
-                               `Subárea` = subarea_rotulo, `Níveis` = niveis)
-  cat(knitr::kable(tab, format = "pipe"), sep = "\n")
+  for (nota in notas) {
+    grupo <- subgrupo |> filter(conceito_atual == nota) |> arrange(nome)
+    cat("\n\n**Conceito ", nota, "** (", nrow(grupo), " programa", if (nrow(grupo) > 1) "s", ")\n\n", sep = "")
+    tab <- grupo |> transmute(
+      Programa = link_prog(id_capes, nome), IES = ies_sigla, UF = uf,
+      `Níveis` = niveis,
+      anterior = ifelse(is.na(conceito_anterior), "—", as.character(conceito_anterior)),
+      `Variação` = case_when(is.na(variacao) ~ "—", variacao > 0 ~ paste0("▲ +", variacao),
+                             variacao < 0 ~ paste0("▼ ", variacao), TRUE ~ "=")
+    )
+    names(tab)[names(tab) == "anterior"] <- paste0("Conceito ", cfg$ciclos$anterior)
+    cat(knitr::kable(tab, format = "pipe"), sep = "\n")
+  }
+
+  sem_nota <- subgrupo |> filter(is.na(conceito_atual))
+  if (nrow(sem_nota)) {
+    cat("\n\n**Sem conceito no ciclo ", cfg$ciclos$atual, "** (programas novos ou sem avaliação registrada)\n\n", sep = "")
+    tab <- sem_nota |> transmute(Programa = link_prog(id_capes, nome), IES = ies_sigla, UF = uf,
+                                 `Níveis` = niveis)
+    cat(knitr::kable(tab, format = "pipe"), sep = "\n")
+  }
 }
 ```
 
@@ -74,6 +85,7 @@ if (nrow(sem_nota)) {
 
 ```{r}
 #| results: asis
+#| echo: false
 elegiveis <- rp |> filter(elegivel) |> arrange(posicao, nome)
 tab <- elegiveis |> transmute(
   `Pos.` = posicao, Programa = link_prog(id_capes, nome), IES = ies_sigla, UF = uf,

@@ -30,6 +30,7 @@ n_sem_coord <- n_total - nrow(mapa)
 
 ```{r}
 #| results: asis
+#| echo: false
 if (n_total == 0) {
   cat("\n::: {.callout-warning}\n## Dados ainda não carregados\nExecute `Rscript R/build_data.R` e valide os arquivos manuais antes de publicar.\n:::\n")
 }
@@ -39,6 +40,7 @@ if (n_total == 0) {
 
 ```{r}
 #| output: asis
+#| echo: false
 if (nrow(mapa) == 0) {
   cat("\n> Nenhum programa tem coordenadas. Preencha `data/manual/coordenadas.csv` (veja a página de metodologia).\n")
 }
@@ -46,6 +48,7 @@ if (nrow(mapa) == 0) {
 
 ```{r}
 #| eval: !expr nrow(mapa) > 0
+#| echo: false
 sd <- SharedData$new(mapa, key = ~id_capes, group = "mapa")
 
 filtros <- list(
@@ -66,12 +69,20 @@ legenda_html <- paste0(
 )
 
 m <- leaflet(sd, height = 600) |>
-  addProviderTiles(providers$CartoDB.Positron) |>
+  addProviderTiles(providers$OpenStreetMap.Mapnik) |>
   addCircleMarkers(
     lng = ~lon_plot, lat = ~lat_plot,
     radius = ~raio, color = ~cor_borda, weight = ~espessura, opacity = 1,
     fillColor = ~cor_fill, fillOpacity = ~opac,
-    popup = ~popup, label = ~hover
+    popup = ~popup,
+    label = ~hover_html,
+    labelOptions = labelOptions(
+      noHide = FALSE,
+      textOnly = FALSE,
+      direction = "top",
+      offset = c(0, -12),
+      className = "map-tooltip"
+    )
   ) |>
   addLegend(
     position = "bottomleft", opacity = 1, title = "Subárea",
@@ -86,6 +97,7 @@ bscols(widths = c(3, 9), filtros, m)
 
 ```{r}
 #| output: asis
+#| echo: false
 if (n_sem_coord > 0) {
   cat(sprintf("\n*%d programa(s) sem coordenadas não aparecem no mapa, mas estão na [lista de programas](programas.qmd).*\n", n_sem_coord))
 }

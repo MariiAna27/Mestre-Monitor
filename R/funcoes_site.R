@@ -115,11 +115,21 @@ dados_mapa <- function(dados) {
                        status == "encerrada" ~ 0.55, TRUE ~ 0.35),
       status_rotulo = rotulo_status(status),
       hover = paste(nome, ies_sigla, sep = " — "),
+      hover_html = paste0(
+        "<div class='map-tooltip-card'>",
+        "<strong>", htmltools::htmlEscape(nome), "</strong><br>",
+        htmltools::htmlEscape(ies_sigla), " · ", htmltools::htmlEscape(municipio), "/", htmltools::htmlEscape(uf),
+        "<br><span class='map-tooltip-subarea'>", htmltools::htmlEscape(subarea_rotulo), "</span>",
+        "</div>"
+      ),
       popup = paste0(
-        "<strong>", html_escape(nome), "</strong><br>", html_escape(ies_sigla), " · ",
-        html_escape(municipio), "/", html_escape(uf), "<br>", html_escape(subarea_rotulo),
-        "<br>Inscrições: ", html_escape(status_rotulo),
-        "<br><a href='programas/", slug_programa(id_capes), ".html'>Ver programa</a>"
+        "<div class='map-popup-card'>",
+        "<strong>", htmltools::htmlEscape(nome), "</strong><br>",
+        htmltools::htmlEscape(ies_sigla), " · ", htmltools::htmlEscape(municipio), "/", htmltools::htmlEscape(uf),
+        "<br><strong>Subárea:</strong> ", htmltools::htmlEscape(subarea_rotulo),
+        "<br><strong>Inscrições:</strong> ", htmltools::htmlEscape(status_rotulo),
+        "<br><a href='programas/", slug_programa(id_capes), ".html'>Ver programa</a>",
+        "</div>"
       )
     )
 }

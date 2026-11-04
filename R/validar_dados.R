@@ -10,7 +10,7 @@ esquemas <- list(
     "id_edital", "id_capes", "ano", "nivel", "inscricao_inicio",
     "inscricao_fim", "vagas", "url_edital", "verificado_em", "previsao_texto"
   ),
-  linhas_pesquisa = c("id_capes", "linha", "descricao", "url_fonte", "verificado_em")
+  linhas_pesquisa = c("id_capes", "linha", "descricao", "url_fonte", "verificado_em", "temas", "metodos")
 )
 
 erros <- character()
@@ -88,6 +88,20 @@ validar_url <- function(tabela, campo, nome) {
   if (any(invalidos)) {
     adicionar_erro(sprintf("%s.csv: %s deve ser uma URL http(s) (linhas %s)", nome, campo,
                            paste(which(invalidos) + 1L, collapse = ", ")))
+  }
+}
+
+validar_etiquetas <- function(tabela, campo, permitidos, nome) {
+  if (is.null(tabela) || !nrow(tabela)) return(invisible(NULL))
+  invalidas <- vapply(seq_len(nrow(tabela)), function(i) {
+    valor <- tabela[[campo]][i]
+    if (is.na(valor) || !nzchar(trimws(valor))) return(FALSE)
+    etiquetas <- trimws(strsplit(valor, ";", fixed = TRUE)[[1]])
+    any(!etiquetas %in% permitidos)
+  }, logical(1))
+  if (any(invalidas)) {
+    adicionar_erro(sprintf("%s.csv: etiqueta inválida em %s nas linhas %s; separe múltiplas etiquetas com ponto e vírgula",
+                           nome, campo, paste(which(invalidas) + 1L, collapse = ", ")))
   }
 }
 
@@ -172,6 +186,13 @@ validar_obrigatorios(tabelas$linhas_pesquisa,
 validar_chave(tabelas$linhas_pesquisa, c("id_capes", "linha"), "linhas_pesquisa")
 validar_url(tabelas$linhas_pesquisa, "url_fonte", "linhas_pesquisa")
 validar_data(tabelas$linhas_pesquisa, "verificado_em", "linhas_pesquisa")
+validar_etiquetas(tabelas$linhas_pesquisa, "temas",
+                  c("instituicoes-politicas", "comportamento-eleitoral", "politicas-publicas",
+                    "teoria-politica", "politica-comparada", "politica-externa", "seguranca-defesa",
+                    "economia-politica-internacional", "organizacoes-internacionais", "integracao-regional"),
+                  "linhas_pesquisa")
+validar_etiquetas(tabelas$linhas_pesquisa, "metodos",
+                  c("quantitativo", "qualitativo", "misto", "teoria-normativa"), "linhas_pesquisa")
 
 programas_path <- file.path(raiz, "data", "processed", "programas.csv")
 if (file.exists(programas_path)) {

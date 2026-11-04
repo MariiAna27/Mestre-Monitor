@@ -11,6 +11,12 @@ COR_CP <- "#1677C8"
 COR_RI <- "#7A42A6"
 COR_AMBAS <- "#7A42A6"
 NOMES_NIVEL <- c(M = "Mestrado acadêmico", MP = "Mestrado profissional", D = "Doutorado")
+TEMAS_AFINIDADE <- c(
+  "instituicoes-politicas", "comportamento-eleitoral", "politicas-publicas",
+  "teoria-politica", "politica-comparada", "politica-externa", "seguranca-defesa",
+  "economia-politica-internacional", "organizacoes-internacionais", "integracao-regional"
+)
+METODOS_AFINIDADE <- c("quantitativo", "qualitativo", "misto", "teoria-normativa")
 
 esquemas_processados <- list(
   programas = list(
@@ -28,7 +34,8 @@ esquemas_processados <- list(
   ),
   linhas_pesquisa = list(
     id_capes = character(), linha = character(), descricao = character(),
-    url_fonte = character(), verificado_em = as.Date(character())
+    url_fonte = character(), verificado_em = as.Date(character()),
+    temas = character(), metodos = character()
   ),
   producao = list(
     id_capes = character(), ano = integer(), docentes_permanentes = numeric(),

@@ -4,6 +4,7 @@ project:
   render:
     - index.qmd
     - programas.qmd
+    - afinidade.qmd
     - editais.qmd
     - comparador.qmd
     - rankings.qmd
@@ -11,6 +12,8 @@ project:
     - programas/*.qmd
   resources:
     - data/processed
+    - afinidade.js
+    - assets/logos
 
 website:
   title: "Monitor de Pós-graduação em CP e RI"
@@ -20,6 +23,8 @@ website:
         href: index.qmd
       - text: "Programas"
         href: programas.qmd
+      - text: "Afinidade"
+        href: afinidade.qmd
       - text: "Editais"
         href: editais.qmd
       - text: "Comparar"

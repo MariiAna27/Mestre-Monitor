@@ -146,7 +146,11 @@ editais <- editais_manual |>
   )
 
 linhas <- ler_manual("linhas_pesquisa") |>
-  mutate(verificado_em = as.Date(verificado_em))
+  mutate(
+    verificado_em = as.Date(verificado_em),
+    temas = coalesce(temas, ""),
+    metodos = coalesce(metodos, "")
+  )
 
 coordenadas <- ler_manual("coordenadas") |>
   mutate(

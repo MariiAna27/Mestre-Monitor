@@ -10,6 +10,9 @@ programas <- ler_processado("programas")
 pasta_paginas <- file.path(raiz, "programas")
 dir.create(pasta_paginas, recursive = TRUE, showWarnings = FALSE)
 
+arquivos_anteriores <- list.files(pasta_paginas, pattern = "\\.qmd$", full.names = TRUE)
+if (length(arquivos_anteriores)) file.remove(arquivos_anteriores)
+
 for (i in seq_len(nrow(programas))) {
   programa <- programas[i, ]
   slug <- slug_programa(programa$id_capes)

@@ -1,0 +1,242 @@
+---
+title: "Teste de afinidade"
+subtitle: "Encontre programas compatíveis com suas preferências"
+page-layout: full
+---
+
+O teste leva cerca de quatro minutos. **Suas respostas são processadas neste navegador, não são enviadas nem armazenadas.** Restrições filtram programas; preferências apenas ordenam os resultados. Os símbolos institucionais usados nos resultados são arquivos locais; instituições sem ícone verificado aparecem com a sigla.
+
+```{r}
+#| include: false
+raiz <- Sys.getenv("QUARTO_PROJECT_DIR", unset = ".")
+source(file.path(raiz, "R", "00_utils.R"))
+source(file.path(raiz, "R", "funcoes_site.R"))
+
+dados <- carregar_dados()
+resumo <- resumo_programas(dados)
+rp <- ler_processado("ranking_produtividade")
+
+regioes_ufs <- list(
+  Norte = c("AC", "AP", "AM", "PA", "RO", "RR", "TO"),
+  Nordeste = c("AL", "BA", "CE", "MA", "PB", "PE", "PI", "RN", "SE"),
+  "Centro-Oeste" = c("DF", "GO", "MS", "MT"),
+  Sudeste = c("ES", "MG", "RJ", "SP"),
+  Sul = c("PR", "RS", "SC")
+)
+
+programas_teste <- resumo |>
+  left_join(dados$coordenadas |> select(id_capes, latitude, longitude), by = "id_capes") |>
+  left_join(rp |> select(id_capes, pub_por_docente_ano, docentes_medio, titulados_por_docente_ano), by = "id_capes") |>
+  mutate(
+    regiao = case_when(
+      uf %in% regioes_ufs$Norte ~ "Norte",
+      uf %in% regioes_ufs$Nordeste ~ "Nordeste",
+      uf %in% regioes_ufs$`Centro-Oeste` ~ "Centro-Oeste",
+      uf %in% regioes_ufs$Sudeste ~ "Sudeste",
+      uf %in% regioes_ufs$Sul ~ "Sul",
+      TRUE ~ ""
+    ),
+    niveis_teste = purrr::pmap(
+      list(tem_mestrado, tem_mestrado_prof, tem_doutorado),
+      function(M, MP, D) as.list(c(if (isTRUE(M)) "M", if (isTRUE(MP)) "MP", if (isTRUE(D)) "D"))
+    )
+  ) |>
+  transmute(
+    id = as.character(id_capes), nome, ies = ies_sigla, municipio, uf, regiao,
+    subarea, natureza, niveis = niveis_teste, latitude, longitude,
+    publicacoes = pub_por_docente_ano, docentes = docentes_medio,
+    titulados = titulados_por_docente_ano
+  )
+
+eventos_por_id <- split(dados$editais, dados$editais$id_capes)
+linhas_por_id <- split(dados$linhas, dados$linhas$id_capes)
+etiquetas_linha <- function(valor) {
+  etiquetas <- trimws(unlist(stringr::str_split(coalesce(valor, ""), ";", simplify = FALSE)))
+  as.list(etiquetas[nzchar(etiquetas)])
+}
+
+programas_teste$linhas <- purrr::map(programas_teste$id, function(id) {
+  linhas <- linhas_por_id[[id]]
+  if (is.null(linhas) || !nrow(linhas)) return(list())
+  purrr::pmap(
+    list(linhas$linha, linhas$descricao, linhas$temas, linhas$metodos),
+    function(titulo, descricao, temas, metodos) list(
+      titulo = titulo, descricao = descricao,
+      temas = etiquetas_linha(temas), metodos = etiquetas_linha(metodos)
+    )
+  )
+})
+
+programas_teste$eventos <- purrr::map(programas_teste$id, function(id) {
+  eventos <- eventos_por_id[[id]]
+  if (is.null(eventos) || !nrow(eventos)) return(list())
+  purrr::pmap(
+    list(eventos$nivel, as.character(eventos$inscricao_inicio),
+         as.character(eventos$inscricao_fim), eventos$previsao_texto),
+    function(nivel, inicio, fim, previsao) list(
+      nivel = nivel, inicio = inicio, fim = fim, previsao = previsao
+    )
+  )
+})
+
+programas_json <- jsonlite::toJSON(
+  programas_teste, dataframe = "rows", auto_unbox = TRUE,
+  na = "null", null = "null"
+)
+```
+
+```{r}
+#| results: asis
+#| echo: false
+cat('<script type="application/json" id="afinidade-dados">', programas_json,
+    '</script>')
+```
+
+::: {#afinidade-app .afinidade-app}
+  <section class="afinidade-etapa" aria-labelledby="afinidade-etapa-1">
+    <p class="afinidade-etapa-indice">01 / RESTRIÇÕES</p>
+    <h2 id="afinidade-etapa-1">O que é inegociável?</h2>
+    <p>Os filtros eliminam apenas incompatibilidades confirmadas. Quando a informação não existe, o programa permanece como não verificado.</p>
+
+    <fieldset class="afinidade-campo">
+      <legend>Níveis que você considera</legend>
+      <ul class="afinidade-opcoes">
+        <li><label><input type="checkbox" name="nivel" value="M" checked> Mestrado acadêmico</label></li>
+        <li><label><input type="checkbox" name="nivel" value="MP" checked> Mestrado profissional</label></li>
+        <li><label><input type="checkbox" name="nivel" value="D" checked> Doutorado</label></li>
+      </ul>
+    </fieldset>
+
+    <section class="afinidade-filtros-local">
+      <label class="afinidade-campo" for="afinidade-regiao">Região
+        <select id="afinidade-regiao">
+          <option value="">Qualquer região</option>
+          <option>Norte</option><option>Nordeste</option><option>Centro-Oeste</option>
+          <option>Sudeste</option><option>Sul</option>
+        </select>
+      </label>
+      <label class="afinidade-campo" for="afinidade-uf">Estado (UF)
+        <select id="afinidade-uf"><option value="">Qualquer UF</option></select>
+      </label>
+      <label class="afinidade-campo" for="afinidade-prazo">Quando pretende se inscrever?
+        <select id="afinidade-prazo">
+          <option value="">Sem preferência de prazo</option>
+          <option value="aberto">Edital com inscrições abertas</option>
+          <option value="90dias">Aberto ou previsto nos próximos 3 meses</option>
+        </select>
+      </label>
+    </section>
+
+    <section class="afinidade-filtros-local">
+      <label class="afinidade-campo" for="afinidade-instituicao">Natureza da instituição
+        <select id="afinidade-instituicao">
+          <option value="">Sem preferência</option>
+          <option value="publica">Pública</option>
+          <option value="privada">Privada</option>
+        </select>
+      </label>
+      <fieldset class="afinidade-campo">
+        <legend>Idiomas que consegue comprovar</legend>
+        <ul class="afinidade-opcoes">
+          <li><label><input type="checkbox" name="idioma" value="ingles"> Inglês</label></li>
+          <li><label><input type="checkbox" name="idioma" value="espanhol"> Espanhol</label></li>
+          <li><label><input type="checkbox" name="idioma" value="frances"> Francês</label></li>
+          <li><label><input type="checkbox" name="idioma" value="outro"> Outro idioma</label></li>
+        </ul>
+      </fieldset>
+    </section>
+
+    <p class="afinidade-aviso-dados"><strong>Verificação pendente:</strong> a base CAPES disponível registra modalidade acadêmica/profissional, não propriedade pública/privada; editais e requisitos de idioma ainda não estão estruturados. Quando você selecionar esses critérios, candidatos sem informação serão mantidos e sinalizados, nunca eliminados por suposição.</p>
+  </section>
+
+  <section class="afinidade-etapa" aria-labelledby="afinidade-etapa-2">
+    <p class="afinidade-etapa-indice">02 / INTERESSES</p>
+    <h2 id="afinidade-etapa-2">O que você quer estudar?</h2>
+
+    <section class="afinidade-campo afinidade-inclinacao">
+      <label for="afinidade-area">Inclinação entre Ciência Política e Relações Internacionais</label>
+      <p class="afinidade-range-extremos"><span>Ciência Política</span><output id="afinidade-area-valor" for="afinidade-area">Equilibrada</output><span>Relações Internacionais</span></p>
+      <input id="afinidade-area" type="range" min="0" max="100" value="50">
+    </section>
+
+    <fieldset class="afinidade-campo">
+      <legend>Temas de interesse</legend>
+      <ul class="afinidade-opcoes afinidade-opcoes-grade">
+        <li><label><input type="checkbox" name="tema" value="instituicoes-politicas"> Instituições políticas</label></li>
+        <li><label><input type="checkbox" name="tema" value="comportamento-eleitoral"> Comportamento eleitoral</label></li>
+        <li><label><input type="checkbox" name="tema" value="politicas-publicas"> Políticas públicas</label></li>
+        <li><label><input type="checkbox" name="tema" value="teoria-politica"> Teoria política</label></li>
+        <li><label><input type="checkbox" name="tema" value="politica-comparada"> Política comparada</label></li>
+        <li><label><input type="checkbox" name="tema" value="politica-externa"> Política externa</label></li>
+        <li><label><input type="checkbox" name="tema" value="seguranca-defesa"> Segurança e defesa</label></li>
+        <li><label><input type="checkbox" name="tema" value="economia-politica-internacional"> Economia política internacional</label></li>
+        <li><label><input type="checkbox" name="tema" value="organizacoes-internacionais"> Organizações internacionais</label></li>
+        <li><label><input type="checkbox" name="tema" value="integracao-regional"> Integração regional</label></li>
+      </ul>
+    </fieldset>
+
+    <fieldset class="afinidade-campo">
+      <legend>Métodos de pesquisa preferidos</legend>
+      <ul class="afinidade-opcoes">
+        <li><label><input type="checkbox" name="metodo" value="quantitativo"> Quantitativo</label></li>
+        <li><label><input type="checkbox" name="metodo" value="qualitativo"> Qualitativo</label></li>
+        <li><label><input type="checkbox" name="metodo" value="misto"> Misto</label></li>
+        <li><label><input type="checkbox" name="metodo" value="teoria-normativa"> Teoria normativa</label></li>
+      </ul>
+    </fieldset>
+
+    <label class="afinidade-campo" for="afinidade-palavras">Palavras-chave do projeto (até três, separadas por vírgula)
+      <input id="afinidade-palavras" type="text" maxlength="160" placeholder="Ex.: eleições, democracia, América Latina">
+    </label>
+    <p class="afinidade-nota">Temas, métodos e palavras-chave não alteram a nota enquanto as linhas de pesquisa e teses não estiverem etiquetadas no catálogo.</p>
+  </section>
+
+  <section class="afinidade-etapa" aria-labelledby="afinidade-etapa-3">
+    <p class="afinidade-etapa-indice">03 / PRIORIDADES</p>
+    <h2 id="afinidade-etapa-3">O que pesa mais na sua escolha?</h2>
+    <p>Escolha um perfil para ajustar os pesos; depois, personalize cada item de 0 (irrelevante) a 3 (muito importante).</p>
+
+    <fieldset class="afinidade-perfis" aria-label="Perfis de prioridades">
+      <button type="button" class="afinidade-perfil" data-profile="academia">Carreira acadêmica</button>
+      <button type="button" class="afinidade-perfil" data-profile="publico">Setor público e diplomacia</button>
+      <button type="button" class="afinidade-perfil" data-profile="mercado">Mercado e consultoria</button>
+      <button type="button" class="afinidade-perfil" data-profile="internacional">Organizações internacionais e ONGs</button>
+    </fieldset>
+
+    <fieldset class="afinidade-pesos"><legend class="visually-hidden">Peso de cada prioridade</legend>
+      <label class="afinidade-peso" for="peso-producao"><span>Produção científica</span><input id="peso-producao" type="range" min="0" max="3" step="1" value="1"><output for="peso-producao">1</output></label>
+      <label class="afinidade-peso" for="peso-internacionalizacao"><span>Internacionalização</span><input id="peso-internacionalizacao" type="range" min="0" max="3" step="1" value="1"><output for="peso-internacionalizacao">1</output></label>
+      <label class="afinidade-peso" for="peso-ambiente"><span>Ambiente e tamanho</span><input id="peso-ambiente" type="range" min="0" max="3" step="1" value="1"><output for="peso-ambiente">1</output></label>
+      <label class="afinidade-peso" for="peso-proximidade"><span>Proximidade de Brasília</span><input id="peso-proximidade" type="range" min="0" max="3" step="1" value="1"><output for="peso-proximidade">1</output></label>
+      <label class="afinidade-peso" for="peso-rapidez"><span>Rapidez para titular</span><input id="peso-rapidez" type="range" min="0" max="3" step="1" value="1"><output for="peso-rapidez">1</output></label>
+    </fieldset>
+
+    <p class="afinidade-nota">Hoje, a proximidade é uma estimativa geográfica em linha reta. Produção, internacionalização, tamanho do ambiente e tempo de titulação não têm cobertura suficiente para pontuar e são ignorados no cálculo, mesmo quando recebem peso.</p>
+    <button type="button" id="afinidade-limpar" class="afinidade-limpar">Limpar restrições</button>
+  </section>
+
+  <section class="afinidade-saida" aria-labelledby="afinidade-resultados-titulo">
+    <header class="afinidade-saida-cabecalho">
+      <section>
+        <p class="afinidade-etapa-indice">RESULTADOS PERSONALIZADOS</p>
+        <h2 id="afinidade-resultados-titulo">Programas mais compatíveis</h2>
+      </section>
+      <p id="afinidade-contagem" class="afinidade-contagem" aria-live="polite"></p>
+    </header>
+    <section id="afinidade-resultados" aria-live="polite">
+      <p>Carregando programas do catálogo...</p>
+    </section>
+  </section>
+:::
+
+::: {.callout-note}
+## Como interpretar o resultado
+A afinidade é uma orientação baseada nas respostas, não uma avaliação de qualidade nem uma previsão de aprovação. A inclinação CP–RI e a distância a Brasília são os únicos sinais pontuados neste protótipo; dados ausentes nunca viram nota zero. Editais sem registro são tratados como **não verificados**, não como incompatíveis. Confira requisitos, bolsas e informações de carreira diretamente nos programas.
+:::
+
+::: {.callout-warning}
+## Antes de usar como orientação definitiva
+A base ainda não permite pontuar temas, métodos, palavras-chave, produção, internacionalização, ambiente ou rapidez. Carreira e bolsas também não são pontuadas: não há dados públicos sistemáticos e comparáveis sobre destino de egressos ou concessão de bolsas.
+:::
+
+<script src="afinidade.js" defer></script>

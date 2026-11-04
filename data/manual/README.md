@@ -14,7 +14,16 @@ separador vírgula e datas no formato `AAAA-MM-DD`. Não inclua dados pessoais.
   deixe as duas datas de inscrição vazias e preencha `previsao_texto`. Toda
   linha precisa de `verificado_em`.
 - `linhas_pesquisa.csv`: uma linha por linha de pesquisa. Registre a página
-  consultada em `url_fonte` e a data da verificação em `verificado_em`.
+  consultada em `url_fonte` e a data da verificação em `verificado_em`. Preencha
+  `temas` e `metodos` com etiquetas do vocabulário controlado abaixo, separadas
+  por ponto e vírgula; os campos podem ficar vazios enquanto não forem revisados.
+
+  Temas: `instituicoes-politicas`, `comportamento-eleitoral`,
+  `politicas-publicas`, `teoria-politica`, `politica-comparada`,
+  `politica-externa`, `seguranca-defesa`, `economia-politica-internacional`,
+  `organizacoes-internacionais`, `integracao-regional`.
+
+  Métodos: `quantitativo`, `qualitativo`, `misto`, `teoria-normativa`.
 
 O identificador `id_capes` deve corresponder ao cadastro processado de
 programas. Rode `Rscript R/build_data.R` na raiz do projeto para importar a

@@ -1,6 +1,8 @@
 ---
 title: "Comparador"
 subtitle: "Escolha de 1 a 3 programas para ver lado a lado"
+page-layout: full
+toc: false
 ---
 
 ```{r}
@@ -24,10 +26,14 @@ comp <- resumo |>
     situacao = status_rotulo,
     abre = fmt_data(inscricao_inicio), fecha = fmt_data(inscricao_fim),
     vagas, verificado = fmt_data(verificado_em),
+    pub_docente_num = as.numeric(pub_por_docente_ano),
     pub_docente = fmt_num(pub_por_docente_ano),
+    tit_docente_num = as.numeric(titulados_por_docente_ano),
     tit_docente = fmt_num(titulados_por_docente_ano),
+    docentes_num = as.numeric(docentes_medio),
     docentes = fmt_num(docentes_medio, 1),
     posicao,
+    convenios_internacionais = NA_real_,
     pagina = paste0("programas/", slug_programa(id_capes), ".html")
   )
 
@@ -39,34 +45,66 @@ anual <- dados$producao |>
 ```
 
 ```{r}
+#| echo: false
 # Este chunk NÃO pode ter 'include: false': ele emite os dados para as células OJS abaixo.
 ojs_define(comp = comp, anual = anual)
 ```
 
 ```{ojs}
+//| echo: false
 programas_comp = transpose(comp)
 anual_dados = transpose(anual)
 opcoes = programas_comp.map(d => d.rotulo).sort((a, b) => a.localeCompare(b, "pt-BR"))
 ```
 
 ```{ojs}
+//| echo: false
 viewof p1 = Inputs.select(opcoes.length ? opcoes : ["—"], {label: "Programa 1"})
 viewof p2 = Inputs.select(["—", ...opcoes], {label: "Programa 2"})
 viewof p3 = Inputs.select(["—", ...opcoes], {label: "Programa 3"})
 ```
 
 ```{ojs}
+//| echo: false
 escolhidos = [p1, p2, p3].filter(x => x !== "—").filter((x, i, a) => a.indexOf(x) === i)
 sel = escolhidos.map(r => programas_comp.find(d => d.rotulo === r))
 
+programa_mais_alto_conceito = sel.length ? sel.reduce((a, b) => ((a.conceito ?? -1) > (b.conceito ?? -1) ? a : b)) : null;
+programa_mais_publicacoes = sel.length ? sel.filter(d => d.pub_docente_num != null && Number.isFinite(d.pub_docente_num)).length ? sel.filter(d => d.pub_docente_num != null && Number.isFinite(d.pub_docente_num)).reduce((a, b) => (a.pub_docente_num > b.pub_docente_num ? a : b)) : null : null;
+programa_mais_docentes = sel.length ? sel.filter(d => d.docentes_num != null && Number.isFinite(d.docentes_num)).length ? sel.filter(d => d.docentes_num != null && Number.isFinite(d.docentes_num)).reduce((a, b) => (a.docentes_num > b.docentes_num ? a : b)) : null : null;
+programa_mais_convenios = null;
+convenios_internacionais = "Não há campo de convênios internacionais disponível na base pública importada para este projeto.";
+```
+
+### Resumo comparativo
+
+```{ojs}
+//| echo: false
+html`
+<div class="comparador-resumo">
+  <div><span>Selecionados</span><strong>${sel.length} de 3</strong></div>
+  <div><span>Maior nota CAPES</span><strong>${programa_mais_alto_conceito ? programa_mais_alto_conceito.nome : '—'}</strong></div>
+  <div><span>Mais publicações</span><strong>${programa_mais_publicacoes ? programa_mais_publicacoes.nome : 'Sem informação'}</strong></div>
+  <div><span>Mais convênios internacionais</span><strong>${programa_mais_convenios ? programa_mais_convenios.nome : 'Sem informação'}</strong></div>
+</div>
+`
+```
+
+::: {.callout-note .comparador-nota}
+## Dados disponíveis e lacunas
+Os indicadores públicos disponíveis são nota CAPES, conceito anterior, vagas, datas de edital, publicações por docente e docentes permanentes. Produção e convênios internacionais não estão integrados à base atual; esses indicadores aparecem como **sem informação**, sem serem tratados como zero.
+:::
+
+```{ojs}
+//| echo: false
 campos = [
   ["Instituição", d => d.ies],
   ["Local", d => d.local],
   ["Subárea", d => d.subarea],
   ["Níveis", d => d.niveis],
   ["Natureza", d => d.natureza],
-  ["Conceito CAPES (ciclo atual)", d => d.conceito],
-  ["Conceito (ciclo anterior)", d => d.conceito_anterior],
+  ["Nota CAPES (ciclo atual)", d => d.conceito],
+  ["Nota anterior", d => d.conceito_anterior],
   ["Inscrições (nível de foco)", d => d.situacao],
   ["Abre em", d => d.abre],
   ["Fecha em", d => d.fecha],
@@ -75,19 +113,22 @@ campos = [
   ["Publicações / docente / ano", d => d.pub_docente],
   ["Titulados / docente / ano", d => d.tit_docente],
   ["Docentes permanentes (média)", d => d.docentes],
-  ["Posição no ranking de produtividade", d => d.posicao]
+  ["Posição no ranking de produtividade", d => d.posicao],
+  ["Convênios internacionais", d => d.convenios_internacionais == null ? "—" : d.convenios_internacionais]
 ]
 
-html`<table class="table comp-table">
+html`<div class="comparador-tabela">${sel.length ? html`<table class="table comp-table">
   <thead><tr><th></th>${sel.map(d => html`<th><a href="${d.pagina}">${d.nome}</a></th>`)}</tr></thead>
   <tbody>${campos.map(([rot, f]) => html`<tr><th scope="row">${rot}</th>${sel.map(d => html`<td>${f(d) ?? "—"}</td>`)}</tr>`)}</tbody>
-</table>`
+</table>` : html`<p class="comparador-vazio">Selecione ao menos um programa para iniciar a comparação.</p>`}</div>`
 ```
 
 ### Publicações por docente permanente, por ano
 
 ```{ojs}
-Plot.plot({
+//| echo: false
+grafico_publicacoes = anual_dados.some(d => escolhidos.includes(d.rotulo) && d.pub_por_docente != null)
+  ? Plot.plot({
   height: 340,
   marginLeft: 50,
   x: {label: "Ano", tickFormat: "d"},
@@ -99,10 +140,12 @@ Plot.plot({
               {x: "ano", y: "pub_por_docente", stroke: "rotulo", marker: "circle"})
   ]
 })
+  : html`<p class="comparador-vazio">Ainda não há dados de produção por ano para desenhar este gráfico.</p>`
 ```
 
 ```{r}
 #| results: asis
+#| echo: false
 if (!nrow(comp)) {
   cat("\n> Comparador indisponível até que os dados dos programas sejam importados. Execute `Rscript R/build_data.R`.\n")
 }

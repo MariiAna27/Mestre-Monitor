@@ -5,3 +5,5 @@ _site/
 data/raw/
 data/processed/
 programas/
+/.quarto/
+programas_files/

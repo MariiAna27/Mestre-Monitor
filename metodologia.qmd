@@ -15,7 +15,23 @@ par  <- ler_tabela("processed", "ranking_produtividade_params")
 
 ## Escopo
 
-O monitor reúne programas de pós-graduação *stricto sensu* da área de avaliação **Ciência Política e Relações Internacionais** da CAPES. Como a área junta duas subáreas, cada programa é classificado por este projeto como **CP** (Ciência Política), **RI** (Relações Internacionais) ou **CP+RI**. Essa classificação **não vem da CAPES**: parte de uma sugestão automática baseada no nome do programa e é revisada manualmente (`data/manual/subarea.csv`).
+Este site reúne os programas de pós-graduação *stricto sensu* da área de avaliação **Ciência Política e Relações Internacionais** da CAPES. A partir da base oficial da CAPES, o projeto seleciona os programas da área, classifica cada um como **CP** (Ciência Política), **RI** (Relações Internacionais) ou **CP+RI**, e depois usa esses dados para montar o mapa, a página de programas, os editais e os rankings.
+
+A classificação por subárea **não é uma coluna da CAPES**. Ela é feita neste projeto a partir da base de programas e da revisão manual em [data/manual/subarea.csv](data/manual/subarea.csv), porque a área reúne duas subáreas e nem sempre o nome do programa deixa claro a qual delas ele pertence.
+
+## Como os dados foram coletados
+
+A coleta segue uma lógica em duas camadas: dados públicos oficiais da CAPES e dados curados manualmente pelo projeto.
+
+1. **Dados da CAPES (origem oficial):**
+   - o arquivo principal é importado em [R/build_data.R](R/build_data.R)
+   - ele lê a base pública da CAPES e filtra os programas da área **Ciência Política e Relações Internacionais**
+   - daí são gerados os arquivos em [data/processed](data/processed)
+
+2. **Dados curados manualmente:**
+   - editais, linhas de pesquisa, coordenadas e informações de revisão humana ficam em [data/manual](data/manual)
+   - esses arquivos são lidos por [R/build_data.R](R/build_data.R) e transformados em tabelas prontas para o site
+   - ou seja, o código faz a junção entre a base oficial e os dados que exigem conferência humana
 
 ## Fontes e datas de atualização
 
@@ -25,32 +41,53 @@ tab <- meta |>
 knitr::kable(tab, format = "pipe")
 ```
 
-- **CAPES, Dados Abertos:** o pipeline importa programas e conceitos do conjunto anual de 2024, base do ciclo 2021–2024. [Fonte oficial e licença CC BY](https://dadosabertos.capes.gov.br/dataset/2021-a-2024-programas-da-pos-graduacao-stricto-sensu-no-brasil). Docentes, discentes, titulados e produção ainda não estão integrados.
-- **Plataforma Sucupira e GeoCAPES:** fontes de conferência para conceitos, avaliações e localização; ainda não são importadas automaticamente.
-- **Sites dos programas:** editais, vagas, calendário, linhas de pesquisa e coordenadas são preenchidos manualmente. Ainda não há verificador automático de mudanças; cada registro deve informar a URL e a data de conferência.
-- **ABCP, ABRI e ANPOCS:** fontes de contexto, eventos e grupos de trabalho; não alimentam os indicadores atuais.
+- **CAPES, Dados Abertos:** a base principal de programas e conceitos foi importada da CAPES. A seleção usada aqui é a área de avaliação **Ciência Política e Relações Internacionais**.
+- **Editais e calendário:** são curados manualmente a partir dos sites oficiais dos programas e registrados em [data/manual/editais.csv](data/manual/editais.csv).
+- **Coordenadas:** e geolocalização dos programas são revisadas manualmente em [data/manual/coordenadas.csv](data/manual/coordenadas.csv).
+- **Linhas de pesquisa:** ficam em [data/manual/linhas_pesquisa.csv](data/manual/linhas_pesquisa.csv), com links e datas de conferência.
+- **Produção e produtividade:** a estrutura do código já está preparada para isso, mas a base pública importada neste projeto ainda não integra todos os indicadores de produção em nível de programa. Por isso, alguns rankings aparecem como ainda não disponíveis ou sem dados suficientes.
+
+## Como isso entra no código
+
+O fluxo do projeto é o seguinte:
+
+- [R/00_utils.R](R/00_utils.R): define as funções base, schemas, conversões e formatação dos dados
+- [R/build_data.R](R/build_data.R): importa a fonte oficial, combina com os arquivos manuais, gera as tabelas processadas e salva em [data/processed](data/processed)
+- [R/funcoes_site.R](R/funcoes_site.R): transforma os dados em objetos prontos para o mapa, para os cards de resumo e para a comparação entre programas
+- [R/build_pages.R](R/build_pages.R): gera as páginas individuais de cada programa
+- [index.qmd](index.qmd), [programas.qmd](programas.qmd), [afinidade.qmd](afinidade.qmd), [editais.qmd](editais.qmd), [comparador.qmd](comparador.qmd), [rankings.qmd](rankings.qmd) e [metodologia.qmd](metodologia.qmd): montam as páginas do site usando os dados processados
+
+Em outras palavras, o site não coleta tudo sozinho pela internet em tempo real. Ele trabalha com uma base processada gerada localmente a partir de fontes oficiais e de arquivos manuais de conferência, o que deixa a estrutura mais transparente e revisável.
+
+## Teste de afinidade
+
+O teste em [afinidade.qmd](afinidade.qmd) separa **restrições** de **preferências**. Nível, região e UF filtram o catálogo CAPES; uma exigência de prazo só elimina um programa quando há um edital cadastrado incompatível. Sem registro significa **não verificado**, não “sem edital”. Os perfis apenas preenchem pesos editáveis.
+
+A nota combina a afinidade CP–RI informada pela pessoa e a proximidade geográfica de Brasília. A distância é calculada em linha reta a partir das coordenadas curadas, normalizada em uma escala heurística de 0 a 2.500 km; ela não representa custo ou tempo de viagem. Os demais dados sem cobertura suficiente (produção, internacionalização, tamanho do ambiente, titulação, linhas de pesquisa etiquetadas, teses, idiomas e natureza pública/privada) são exibidos como indisponíveis e não reduzem a nota. O cálculo ocorre no navegador; o projeto não envia nem armazena respostas.
+
+Antes de apresentar o teste como orientação consolidada, recomenda-se avaliá-lo com 8 a 10 estudantes de pós-graduação e verificar se os resultados e as mudanças de peso fazem sentido.
 
 ## Conceito CAPES
 
-O conceito é a nota atribuída ao programa nos ciclos avaliativos da CAPES. O ranking usa o ciclo **`r cfg$ciclos$atual`** e mostra o ciclo **`r cfg$ciclos$anterior`** para comparação. Programas com a mesma nota são agrupados, sem posições. Notas de programas acadêmicos e profissionais devem ser comparadas com cautela.
+O conceito é a nota atribuída ao programa nos ciclos avaliativos da CAPES. O ranking usa o ciclo **`r cfg$ciclos$atual`** e mostra também o ciclo **`r cfg$ciclos$anterior`** como comparação. Programas com a mesma nota são agrupados, sem posições artificiais. Notas de programas acadêmicos e profissionais devem ser comparadas com cautela, porque o contexto de avaliação não é completamente equivalente.
 
-## Produtividade
+## Produtividade e limites do indicador
 
-- **Indicador principal:** publicações por docente permanente por ano. É o total de publicações dos anos **`r par$janela_inicio`–`r par$janela_fim`** dividido pela soma de docentes permanentes ano a ano.
-- **Indicador complementar:** titulados por docente permanente por ano, na mesma janela.
-- **Elegibilidade:** mínimo de **`r par$min_anos_com_dados` anos com dados** e média de **`r par$min_docentes_medio` docentes permanentes**; programas fora desse critério aparecem em lista separada, com o motivo.
-- **Sem índice composto:** os indicadores não são combinados em uma nota única, para não esconder escolhas arbitrárias de peso.
+- **Indicador principal:** publicações por docente permanente por ano.
+- **Indicador complementar:** titulados por docente permanente por ano.
+- **Elegibilidade:** a lógica do ranking exige número mínimo de anos com dados e de docentes permanentes para que um programa entre no ranking.
+- **Sem índice composto:** o projeto não combina publicações e conceito em uma única nota, porque isso exigiria escolhas arbitrárias de peso.
 
 **Limitações conhecidas**
 
-1. Livros e capítulos pesam muito na área, e bases bibliográficas internacionais cobrem mal a produção em português; qualquer ranking baseado em indexadores tende a penalizar programas que publicam mais em livros e periódicos nacionais.
+1. Livros e capítulos pesam muito na área, e bases bibliográficas internacionais cobrem mal a produção em português; por isso, rankings baseados só em indexadores tendem a penalizar programas que publicam mais em livros e periódicos nacionais.
 2. Programas com poucos docentes têm indicadores instáveis.
 3. Publicar mais não significa publicar melhor.
 4. Mudanças de critério de coleta da CAPES entre anos podem afetar comparações históricas.
 
 ## Editais
 
-Cada edital mostra a **data da última verificação** (`verificado_em`). O status ("aberta", "abre em breve", "encerrada") é calculado automaticamente a partir das datas de inscrição e da data de geração do site. No mapa, o status refere-se ao **mestrado**, quando o programa oferece; senão, ao doutorado.
+Cada edital mostra a **data da última verificação** (`verificado_em`). O status ("aberta", "abre em breve", "encerrada") é calculado automaticamente a partir das datas de inscrição e da data de geração do site. No mapa, o status reflete o **mestrado**, quando o programa oferece; senão, o doutorado.
 
 ## Atualização
 
@@ -61,11 +98,6 @@ Cada edital mostra a **data da última verificação** (`verificado_em`). O stat
 | Subáreas e coordenadas | na entrada de cada programa e revisão anual | curadoria de dados |
 | Linhas de pesquisa e links oficiais | semestral | curadoria de programas |
 | Produção e titulação | anual, após integração da fonte CAPES | manutenção do pipeline + revisão metodológica |
-
-As funções estão definidas, mas seus titulares ainda precisam ser identificados
-pela equipe antes da publicação. O rodapé de todas as páginas informa a data
-da versão dos dados. As datas de conferência dos editais, linhas de pesquisa e
-coordenadas também ficam registradas por fonte nas tabelas processadas.
 
 ## Baixar os dados
 
