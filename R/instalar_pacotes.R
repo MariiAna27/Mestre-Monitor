@@ -1,17 +1,18 @@
 pacotes <- c(
   "dplyr", "tidyr", "purrr", "stringr", "tibble", "readr",
-  "jsonlite",
-  "ggplot2",
-  "leaflet", "crosstalk",
-  "DT", "htmltools", "htmlwidgets",
-  "png", "raster", "sf",
-  "knitr", "rmarkdown"
+  "jsonlite", "ggplot2", "leaflet", "crosstalk", "DT",
+  "htmltools", "knitr"
 )
 
 faltantes <- pacotes[!vapply(pacotes, requireNamespace, logical(1), quietly = TRUE)]
 
 if (length(faltantes)) {
-  install.packages(faltantes, repos = "https://cloud.r-project.org")
+  repos <- getOption("repos")
+  if (is.null(repos) || !length(repos)) repos <- character()
+  if (is.null(repos[["CRAN"]]) || is.na(repos[["CRAN"]]) || repos[["CRAN"]] == "@CRAN@") {
+    repos["CRAN"] <- "https://cloud.r-project.org"
+  }
+  install.packages(faltantes, repos = repos)
 } else {
   message("Todos os pacotes R necessários já estão instalados.")
 }
