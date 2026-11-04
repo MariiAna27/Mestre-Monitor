@@ -32,12 +32,30 @@ if (nzchar(csv_configurado)) {
     }
   }
 } else if (!file.exists(raw_path) || forcar) {
-  options(timeout = max(120, getOption("timeout")))
-  status <- tryCatch(
-    utils::download.file(url_capes, raw_path, mode = "wb", quiet = FALSE, method = "libcurl"),
-    error = function(e) stop("Falha ao baixar o CSV CAPES: ", conditionMessage(e), call. = FALSE)
-  )
-  if (!identical(status, 0L)) stop("Download CAPES terminou com código ", status, call. = FALSE)
+  options(timeout = max(600, getOption("timeout")))
+  ultimo_erro <- NULL
+  for (tentativa in seq_len(3L)) {
+    status <- tryCatch(
+      utils::download.file(url_capes, raw_path, mode = "wb", quiet = FALSE, method = "libcurl"),
+      error = function(e) {
+        ultimo_erro <<- conditionMessage(e)
+        -1L
+      }
+    )
+    if (identical(status, 0L) && file.exists(raw_path)) break
+    ultimo_erro <- if (is.null(ultimo_erro)) paste("Download CAPES terminou com código", status) else ultimo_erro
+    if (tentativa < 3L) {
+      message(sprintf("Tentativa %s/%s falhou ao baixar o CSV CAPES: %s", tentativa, 3L, ultimo_erro))
+      Sys.sleep(5)
+    }
+  }
+  if (!file.exists(raw_path) || !identical(status, 0L)) {
+    stop(
+      "Não foi possível baixar o CSV CAPES após 3 tentativas. ",
+      "Use um CSV local e configure CAPES_PROGRAMAS_CSV=/caminho/arquivo.csv ou baixe a base manualmente.",
+      call. = FALSE
+    )
+  }
 }
 
 programas_raw <- readr::read_delim(
@@ -216,13 +234,11 @@ rodape <- c(
 )
 writeLines(rodape, file.path(raiz, "_includes", "footer.html"), useBytes = TRUE)
 
-status_validacao <- system2(
-  file.path(R.home("bin"), "Rscript"),
-  file.path(raiz, "R", "validar_dados.R")
-)
-if (!identical(status_validacao, 0L)) {
-  stop("Validação dos dados falhou; revise os arquivos manuais antes de publicar.", call. = FALSE)
+validador_path <- file.path(raiz, "R", "validar_dados.R")
+if (!file.exists(validador_path)) {
+  stop("Arquivo de validação não encontrado: ", validador_path, call. = FALSE)
 }
+source(validador_path, local = FALSE)
 
 cat(nrow(programas), "programas ativos importados para a área; arquivos gravados em data/processed/.\n")
 cat("Fonte: CAPES, [Dados Abertos] (licença CC BY), base ", ano_base, ".\n", sep = "")
