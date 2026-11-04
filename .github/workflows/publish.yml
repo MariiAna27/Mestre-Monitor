@@ -36,6 +36,11 @@ jobs:
           mkdir -p "$RUNNER_TEMP/R-library"
           echo "R_LIBS_USER=$RUNNER_TEMP/R-library" >> "$GITHUB_ENV"
 
+      - name: Install system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgdal-dev libgeos-dev libproj-dev libudunits2-dev libpng-dev
+
       - name: Cache R packages
         uses: actions/cache@v4
         with:
